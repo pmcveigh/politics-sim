@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import random
 from typing import List
 
 from .engine import SimulationEngine
-from .models import PoliticalMoment, Role
+from .models import Moment, Role
 
 
 class TerminalUI:
@@ -11,12 +12,12 @@ class TerminalUI:
         self.engine = engine
 
     def run(self) -> None:
-        self._setup_game()
+        self.setup_game()
         while True:
-            print("\n=== Northern Ireland Political Simulator (Daily Political Moments) ===")
+            self.show_header()
             print("1. View today's agenda")
-            print("2. Respond to a moment")
-            print("3. Ignore/defer a moment")
+            print("2. Respond to a political moment")
+            print("3. Ignore or defer a moment")
             print("4. View player profile")
             print("5. View party overview")
             print("6. View faction overview")
@@ -25,148 +26,180 @@ class TerminalUI:
             print("9. Advance time")
             print("10. View event log")
             print("11. Quit")
-            self.show_dashboard()
             choice = input("Select: ").strip()
             if choice == "1":
                 self.show_agenda()
             elif choice == "2":
                 self.respond_to_moment()
             elif choice == "3":
-                self.ignore_moment()
+                self.ignore_or_defer()
             elif choice == "4":
                 self.show_player_profile()
             elif choice == "5":
                 self.show_party_overview()
             elif choice == "6":
-                self.show_factions()
+                self.show_faction_overview()
             elif choice == "7":
-                self.show_constituency()
+                self.show_constituency_overview()
             elif choice == "8":
                 self.show_relationships()
             elif choice == "9":
-                print(self.engine.advance_time_slot())
+                print(self.engine.advance_time())
             elif choice == "10":
                 self.show_event_log()
             elif choice == "11":
                 print("Goodbye.")
                 break
 
-    def _setup_game(self) -> None:
-        print("Welcome. Every day is politically active.")
-        name = input("Your name: ").strip() or "Player"
-        party_id = self._pick_from(["unionist_front", "people_first", "civic_alliance"], "Choose party")
-        role = Role(self._pick_from([r.value for r in Role], "Choose starting role"))
-        constituency = self._pick_from(
-            ["East Belfast", "North Down", "Fermanagh and South Tyrone", "West Belfast", "Lagan Valley"],
+    def setup_game(self) -> None:
+        print("Northern Ireland Political Simulator - Stage 1 terminal prototype")
+        party_id = self.pick_option("Choose party", ["unionist_front", "people_first", "civic_alliance"])
+        role = Role(self.pick_option("Choose role", [r.value for r in Role]))
+        constituency = self.pick_option(
             "Choose constituency",
+            ["East Belfast", "North Down", "Fermanagh and South Tyrone", "West Belfast", "Lagan Valley"],
         )
-        state = self.engine.create_simulation(name, party_id, role, constituency, faction="Local network")
-        print(f"Simulation started on {state.game_date.label()}.")
+        typed_name = input("Player name (leave blank for generated name): ").strip()
+        name = typed_name or self.generate_name()
+        self.engine.create_simulation(name, party_id, role, constituency)
 
     @staticmethod
-    def _pick_from(options: List[str], prompt: str) -> str:
-        print(f"{prompt}:")
-        for i, option in enumerate(options, start=1):
-            print(f"  {i}. {option}")
-        while True:
-            pick = input("Number: ").strip()
-            if pick.isdigit() and 1 <= int(pick) <= len(options):
-                return options[int(pick) - 1]
-            print("Invalid choice.")
+    def generate_name() -> str:
+        first = random.choice(["Erin", "Cal", "Aoife", "Niall", "Megan", "Ciara", "Connor", "Leah", "Rory"])
+        last = random.choice(["Wallace", "Donnelly", "McIvor", "Lennon", "Taggart", "Reid", "Sloan", "Mullan"])
+        return f"{first} {last}"
 
-    def show_dashboard(self) -> None:
+    @staticmethod
+    def pick_option(prompt: str, options: List[str]) -> str:
+        print(prompt)
+        for idx, option in enumerate(options, start=1):
+            print(f"{idx}. {option}")
+        while True:
+            choice = input("Number: ").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(options):
+                return options[int(choice) - 1]
+            print("Invalid option.")
+
+    def show_header(self) -> None:
         s = self.engine.state
         assert s is not None
-        print(
-            f"\nDate: {s.game_date.label()} | Role: {s.player.career.current_role.value} | "
-            f"Stamina: {s.player.stamina} | Party: {s.parties[s.player.party_id].name} | Constituency: {s.player.constituency}"
-        )
-        urgent = [m for m in s.daily_agenda.moments if m.urgency.value in ["high", "critical"]]
-        if urgent:
-            print("Urgent warnings:")
-            for m in urgent:
-                print(f"- {m.title} ({m.urgency.value})")
+        actor = s.actors[s.player.actor_id]
+        party = s.parties[actor.party_id]
+        print("\n" + "=" * 72)
+        print(f"Date: {s.date_label()}")
+        print(f"Player: {actor.role.value} {actor.name}, {self.engine.player_constituency.name}, {party.party_type.value} party")
+        print(f"Stamina: {s.player.stamina} | Influence: {actor.influence} | Career momentum: {s.player.career_momentum}")
 
     def show_agenda(self) -> None:
         s = self.engine.state
+        assert s is not None
         print("Today's agenda:")
-        if not s.daily_agenda.moments:
-            print("- No remaining moments today.")
+        if not s.active_moments:
+            print("No active moments. Advance time to generate fresh pressure.")
             return
-        for m in s.daily_agenda.moments:
-            print(f"- [{m.time_slot.value}] {m.title} | {m.category.value} | urgency: {m.urgency.value}")
+        for idx, moment in enumerate(s.active_moments, start=1):
+            expiry_slot = min(3, moment.created_slot_index + moment.expires_after_slots)
+            expiry_label = ["Morning", "Afternoon", "Evening", "Late Night"][expiry_slot]
+            print(
+                f"{idx}. {moment.title} | {', '.join(moment.institution_tags)} | {moment.urgency.value} urgency | expires {expiry_label}"
+            )
+            print(f"   Actors/Factions: {', '.join(moment.involved_actor_ids[:2])}; {', '.join(moment.faction_tags[:2])}")
 
-    def _pick_moment(self) -> PoliticalMoment | None:
+    def choose_moment(self) -> Moment | None:
         s = self.engine.state
-        if not s.daily_agenda.moments:
-            print("No moments available.")
+        assert s is not None
+        if not s.active_moments:
+            print("No moments to choose.")
             return None
-        for i, m in enumerate(s.daily_agenda.moments, start=1):
-            print(f"{i}. [{m.time_slot.value}] {m.title} ({m.urgency.value})")
-        pick = input("Pick moment: ").strip()
-        if not pick.isdigit() or not (1 <= int(pick) <= len(s.daily_agenda.moments)):
-            print("Invalid choice.")
+        for idx, moment in enumerate(s.active_moments, start=1):
+            print(f"{idx}. {moment.title} ({moment.urgency.value})")
+        pick = input("Pick moment number: ").strip()
+        if not pick.isdigit() or not 1 <= int(pick) <= len(s.active_moments):
+            print("Invalid moment.")
             return None
-        return s.daily_agenda.moments[int(pick) - 1]
+        return s.active_moments[int(pick) - 1]
 
     def respond_to_moment(self) -> None:
-        moment = self._pick_moment()
+        moment = self.choose_moment()
         if not moment:
-            return
-        options = self.engine.get_available_options(moment)
-        if not options:
-            print("No actions available for this role.")
             return
         print(f"\n{moment.title}\n{moment.description}")
-        for i, option in enumerate(options, start=1):
-            action_type = "minor" if option.is_minor_action else "main"
-            print(f"{i}. ({action_type}) {option.text}")
-        pick = input("Choose option: ").strip()
-        if not pick.isdigit() or not (1 <= int(pick) <= len(options)):
-            print("Invalid choice.")
+        print(f"Consequence tension: {moment.consequence_summary}")
+        decisions = self.engine.available_decisions(moment)
+        if not decisions:
+            print(self.engine.role_authority_message())
             return
-        print("\nDecision result:")
-        print(self.engine.apply_decision(moment.id, options[int(pick) - 1].id))
+        for idx, decision in enumerate(decisions, start=1):
+            print(f"{idx}. {decision.label} | risk {decision.risk_level}/100 | stamina {decision.stamina_cost}")
+            print(f"   {decision.description}")
+        pick = input("Choose decision: ").strip()
+        if not pick.isdigit() or not 1 <= int(pick) <= len(decisions):
+            print("Invalid decision.")
+            return
+        print(self.engine.apply_decision(moment.id, decisions[int(pick) - 1].id))
 
-    def ignore_moment(self) -> None:
-        moment = self._pick_moment()
+    def ignore_or_defer(self) -> None:
+        moment = self.choose_moment()
         if not moment:
             return
-        print(self.engine.ignore_moment(moment.id))
+        action = self.pick_option("Ignore or defer", ["Ignore", "Defer"])
+        print(self.engine.ignore_moment(moment.id, defer=(action == "Defer")))
 
     def show_player_profile(self) -> None:
-        p = self.engine.state.player
-        print(f"Name: {p.name} | Role: {p.career.current_role.value} | Constituency: {p.constituency}")
-        print(f"Reputation {p.reputation} | Influence {p.influence} | Party trust {p.party_trust} | Leader trust {p.leader_trust}")
-        print(f"Local base {p.local_base} | Media profile {p.media_profile} | Career momentum {p.career_momentum} | Stamina {p.stamina}")
+        s = self.engine.state
+        assert s is not None
+        a = s.actors[s.player.actor_id]
+        p = s.player
+        print(f"{a.name} | {p.current_role.value}")
+        print(f"Reputation: {a.reputation} | Competence: {a.competence} | Influence: {a.influence}")
+        print(f"Party trust: {p.party_trust} | Leader trust: {p.leader_trust} | Faction support: {p.faction_support}")
+        print(f"Local base: {p.local_base} | Media profile: {p.media_profile} | Stamina: {p.stamina}")
+        print("Role-limited actions:")
+        for action in p.available_actions:
+            print(f"- {action}")
+        if p.career_state.promotion_offers:
+            print("Career opportunities:")
+            for idx, role in enumerate(p.career_state.promotion_offers, start=1):
+                print(f"{idx}. {role.value}")
+            if input("Accept one now? (y/n): ").strip().lower() == "y":
+                pick = input("Number: ").strip()
+                if pick.isdigit() and 1 <= int(pick) <= len(p.career_state.promotion_offers):
+                    print(self.engine.accept_promotion(p.career_state.promotion_offers[int(pick) - 1]))
 
     def show_party_overview(self) -> None:
         s = self.engine.state
-        party = s.parties[s.player.party_id]
-        print(f"Party: {party.name} | Leader: {party.leader}")
-        for k, v in party.variables.items():
-            print(f"- {k}: {v}")
+        assert s is not None
+        party = s.parties[s.actors[s.player.actor_id].party_id]
+        print(f"{party.name} ({party.party_type.value})")
+        print(f"Unity {party.party_unity} | Leader authority {party.leader_authority} | Public trust {party.public_trust}")
+        print(f"Media pressure {party.media_pressure} | Election readiness {party.election_readiness} | Government credibility {party.government_credibility}")
+        print("Custom variables:")
+        for key, val in party.custom_variables.items():
+            print(f"- {key}: {val}")
 
-    def show_factions(self) -> None:
+    def show_faction_overview(self) -> None:
         s = self.engine.state
-        party = s.parties[s.player.party_id]
-        print("Factions:")
-        for f in party.factions:
-            print(f"- {f.name}: influence {f.influence}, discipline {f.discipline}, leader loyalty {f.loyalty_to_leader}")
+        assert s is not None
+        party_id = s.actors[s.player.actor_id].party_id
+        for faction in [f for f in s.factions.values() if f.party_id == party_id]:
+            print(f"{faction.name} | strength {faction.strength} | agitation {faction.agitation} | leader loyalty {faction.loyalty_to_leader}")
 
-    def show_constituency(self) -> None:
-        s = self.engine.state
-        c = s.constituencies[s.player.constituency]
-        print(f"Constituency: {c.name}")
+    def show_constituency_overview(self) -> None:
+        c = self.engine.player_constituency
+        print(f"{c.name} | flashpoint: {c.current_flashpoint}")
         print(f"Unionist {c.unionist_strength} | Nationalist {c.nationalist_strength} | Cross-community {c.cross_community_strength}")
-        print(f"Turnout energy {c.turnout_energy} | Local issue pressure {c.local_issue_pressure}")
+        print(f"Working class pressure {c.working_class_pressure} | Middle class pressure {c.middle_class_pressure}")
+        print(f"Rural pressure {c.rural_pressure} | Urban pressure {c.urban_pressure}")
+        print(f"Local issue pressure {c.local_issue_pressure} | Turnout energy {c.turnout_energy} | Local media heat {c.local_media_heat}")
 
     def show_relationships(self) -> None:
-        rel = self.engine.state.player.relationships
-        print("Relationships:")
-        for item in rel.values():
-            print(f"- {item.target}: {item.score}")
+        s = self.engine.state
+        assert s is not None
+        for rel in s.relationships.values():
+            print(f"{rel.label}: {rel.score}")
 
     def show_event_log(self) -> None:
-        for entry in self.engine.state.event_log[-20:]:
-            print(f"- {entry}")
+        s = self.engine.state
+        assert s is not None
+        for item in s.event_log[-20:]:
+            print(f"- {item}")
