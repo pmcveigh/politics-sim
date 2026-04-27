@@ -1,56 +1,52 @@
-# Northern Ireland Political Simulator (Stage 1 terminal prototype)
+# Northern Ireland Political Simulator - MVP-of-the-MVP
 
 ## What this prototype is
-This is a terminal-playable political simulator set in a fictional Northern Ireland ecosystem. You are not the centre of the world: you are one actor in a living system where rivals, factions, journalists and institutions keep moving with or without your intervention.
+A compact, event-driven desktop prototype built with **Python + PySide6**. You play one actor inside a live political machine. Politics moves with or without you.
 
-## How to run
+## Install
+```bash
+python -m pip install PySide6
+```
+
+## Run
 ```bash
 python -m political_sim.main
 ```
 
-## Daily political moment system
-- Time is tracked in four daily slots: **Morning**, **Afternoon**, **Evening**, **Late Night**.
-- At the start of each day, the engine creates **1 to 3 political moments** based on party pressure, faction agitation, constituency context, role access and institutional context.
-- Core loop:
-  1. View agenda.
-  2. Pick a moment to handle (or ignore/defer).
-  3. Choose a role-limited decision.
-  4. System reacts, time advances, unhandled moments evolve.
-- Normal flow never jumps by more than one day.
+## Stage 1 includes
+- GUI with persistent layout:
+  - Left nav: Dashboard, Inbox, Party, Factions, Actors, Constituency, Relationships, Career, Log.
+  - Top bar: date, time slot, player identity and core stats.
+  - Main panel: selected screen.
+  - Right panel: context summary and warnings.
+- Default start:
+  - Fictional player.
+  - **Councillor**.
+  - **Civic Alliance Party**.
+  - **North Down**.
+- Event-driven time slots: Morning, Afternoon, Evening, Late Night.
+- 12 core political moments for the intended path:
+  - Councillor -> Candidate -> MLA -> crisis survivor -> junior minister offer.
+- Role-limited decisions (invalid decisions hidden).
+- Ignore handling with independent system reactions and rival gains.
+- Decision Result view with visible consequences.
+- Chronological event log.
 
-## Parties included (loaded into one shared engine)
-- **Unionist Democratic Front** (DUP-style)
-- **People First Republican Movement** (Sinn Féin-style)
-- **Civic Alliance Party** (Alliance-style)
+## Intentionally not included
+- Full UK simulation.
+- Full election model.
+- Real politicians.
+- Passive weekly stat drift.
+- Database/save system.
 
-The same simulation engine handles all party types via data models and party variables.
+## Event-driven consequences
+Variables change only when moments are handled or ignored. The simulation does **not** apply passive weekly stat decay.
 
-## Playable roles
-- Activist
-- Councillor
-- Candidate
-- MLA
-- Adviser
-- Junior Minister
-- Minister
+## Career path logic
+Progression is gated by thresholds and events.
+- Candidate selection checks reputation, local base, branch relationship and momentum.
+- MLA status is triggered through election result moments.
+- Junior minister is an offer moment and can be accepted or declined.
 
-Each role has different authority and available actions. Lower roles can influence, lobby, leak, campaign and build relationships, but cannot command whole-party strategy.
-
-## What is included in Stage 1
-- Complete dataclass-based model for parties, factions, actors, player, institutions, constituencies, relationships, moments and decisions.
-- 30 party-specific political moments (10 per party style).
-- Daily agenda UI with urgency, expiry, involved actors/factions and risk hints.
-- Role-limited decisions plus fallback influence options.
-- Ignored/deferred moments continue through system reactions and expiry logic.
-- Career momentum and career opportunity offers (no automatic promotion).
-- Event log and quick state inspection menus.
-
-## What is not included yet
-- GUI.
-- Save/load system.
-- Deep economic model.
-- Multi-party coalition negotiation gameplay beyond the prototype abstraction.
-- Full AI planning for every actor.
-
-## Why the player is a cog, not a controller
-The engine resolves unhandled moments, allows rivals to gain credit, escalates unresolved issues, and generates system reactions from leaders, factions, media and opposing parties. You influence outcomes from your role, but you do not command the system.
+## The player is a cog in a system
+Ignoring moments can help rivals, reduce trust, and trigger consequences. The machine keeps moving whether you intervene or not.

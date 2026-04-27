@@ -1,8 +1,8 @@
-# Northern Ireland Political Simulator
+# political-sim
 
-See `political_sim/README.md` for full Stage 1 prototype documentation and gameplay details.
+See project docs in `political_sim/README.md`.
 
-Run with:
+Run:
 
 ```bash
 python -m political_sim.main
