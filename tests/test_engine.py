@@ -1,97 +1,120 @@
 from political_sim.engine import SimulationEngine
-from political_sim.models import ItemStatus, Role, RoutineCategory
+from political_sim.models import BeatStatus, TimeSlot
 
 
-def test_daily_agenda_has_structure():
+def _first_story_beat(engine: SimulationEngine):
+    return next(b for b in engine.state.daily_beats.values() if b.linked_story_arc_id and b.status == BeatStatus.OPEN)
+
+
+def test_day_template_generates_plausible_day():
     engine = SimulationEngine()
     state = engine.create_simulation()
-    assert state.daily_agenda.routine_obligation_id
-    assert state.daily_agenda.opportunity_id
-    assert state.daily_agenda.complication_id
+    assert state.daily_agenda.template_id in {"admin", "crisis", "campaign", "council", "community"}
+    assert all(slot in state.daily_agenda.beats_by_slot for slot in [TimeSlot.MORNING, TimeSlot.AFTERNOON, TimeSlot.EVENING, TimeSlot.LATE_NIGHT])
 
 
-def test_agenda_includes_obligation_opportunity_complication():
+def test_beats_appear_in_time_slots():
     engine = SimulationEngine()
     state = engine.create_simulation()
-    ids = {state.daily_agenda.routine_obligation_id, state.daily_agenda.opportunity_id, state.daily_agenda.complication_id}
-    assert len(ids) == 3
+    assert state.daily_agenda.beats_by_slot[TimeSlot.MORNING]
+    assert engine.beats_for_slot(TimeSlot.MORNING)
 
 
-def test_role_limited_decisions_are_filtered():
-    engine = SimulationEngine()
-    state = engine.create_simulation(role=Role.COUNCILLOR)
-    item = engine.items_for_current_slot()[0]
-    assert all(state.player.role in d.allowed_roles for d in engine.available_decisions(item))
-
-
-def test_casework_backlog_changes_after_decision():
+def test_decision_sets_story_flags():
     engine = SimulationEngine()
     state = engine.create_simulation()
-    item = engine.items_for_current_slot()[0]
-    before = state.player.casework_backlog
-    decision = next(d for d in engine.available_decisions(item) if "backlog" in str(d.effects))
-    engine.apply_decision(item.id, decision.id)
-    assert state.player.casework_backlog != before
-
-
-def test_ignored_item_can_benefit_rival():
-    engine = SimulationEngine()
-    state = engine.create_simulation()
-    item = engine.items_for_current_slot()[0]
-    before = state.player.rival_threat
-    engine.ignore_item(item.id)
-    assert state.player.rival_threat > before
-
-
-def test_officer_relationship_affects_outcome():
-    engine = SimulationEngine()
-    state = engine.create_simulation()
-    state.player.officer_relationship = 60
-    # find officer follow-up day
-    found = None
-    for _ in range(8):
-        for item in engine.items_for_current_slot():
-            if item.category == RoutineCategory.OFFICER_FOLLOW_UP:
-                found = item
-                break
-        if found:
-            break
+    beat = _first_story_beat(engine)
+    option = beat.decision_options[0]
+    while engine.state.current_slot != beat.time_slot:
         engine.advance_time()
-    assert found is not None
-    decision = engine.available_decisions(found)[0]
-    result = engine.apply_decision(found.id, decision.id)
-    assert "officer replies quickly" in result
+    engine.choose_beat(beat.id, option.id)
+    arc = state.active_story_arcs[beat.linked_story_arc_id]
+    assert any(arc.flags.get(flag) for flag in option.flags_set)
 
 
-def test_social_media_choice_affects_volatility():
+def test_decision_schedules_followup():
     engine = SimulationEngine()
     state = engine.create_simulation()
-    item = engine.items_for_current_slot()[0]
-    before = state.player.social_media_volatility
-    decision = next((d for d in engine.available_decisions(item) if d.handling_style.value == "Public Campaigning"), None)
-    if decision:
-        engine.apply_decision(item.id, decision.id)
-        assert state.player.social_media_volatility != before
+    beat = _first_story_beat(engine)
+    option = next(o for o in beat.decision_options if o.next_beats)
+    while engine.state.current_slot != beat.time_slot:
+        engine.advance_time()
+    engine.choose_beat(beat.id, option.id)
+    assert state.followups
 
 
-def test_career_selection_opportunity_appears_after_thresholds():
+def test_ignored_beat_can_trigger_rival_action():
+    engine = SimulationEngine()
+    state = engine.create_simulation()
+    beat = _first_story_beat(engine)
+    while engine.state.current_slot != beat.time_slot:
+        engine.advance_time()
+    engine.ignore_beat(beat.id)
+    arc = state.active_story_arcs[beat.linked_story_arc_id]
+    assert arc.flags.get("rival_intervened") is True
+
+
+def test_actor_reaction_modifies_relationship():
+    engine = SimulationEngine()
+    state = engine.create_simulation()
+    beat = next(b for b in engine.state.daily_beats.values() if b.linked_story_arc_id and any(o.possible_actor_reactions for o in b.decision_options))
+    option = next(o for o in beat.decision_options if o.possible_actor_reactions)
+    reaction_id = option.possible_actor_reactions[0]
+    before = state.relationships[reaction_id].score
+    while engine.state.current_slot != beat.time_slot:
+        engine.advance_time()
+    engine.choose_beat(beat.id, option.id)
+    after = state.relationships[reaction_id].score
+    assert after != before
+
+
+def test_dashboard_data_model_has_todays_flow():
+    engine = SimulationEngine()
+    state = engine.create_simulation()
+    assert state.daily_agenda.beats_by_slot
+    assert sum(len(v) for v in state.daily_agenda.beats_by_slot.values()) > 0
+
+
+def test_story_arc_advances_after_decision():
+    engine = SimulationEngine()
+    state = engine.create_simulation()
+    beat = _first_story_beat(engine)
+    arc = state.active_story_arcs[beat.linked_story_arc_id]
+    before = arc.current_stage
+    while engine.state.current_slot != beat.time_slot:
+        engine.advance_time()
+    engine.choose_beat(beat.id, beat.decision_options[0].id)
+    assert arc.current_stage > before
+
+
+def test_no_passive_weekly_drift_exists():
+    engine = SimulationEngine()
+    state = engine.create_simulation()
+    before = (state.player.reputation, state.player.local_base)
+    for _ in range(8):
+        engine.advance_time()
+    after = (state.player.reputation, state.player.local_base)
+    assert before == after
+
+
+def test_career_eligibility_reachable_via_story_and_routine_success():
     engine = SimulationEngine()
     state = engine.create_simulation()
     state.player.reputation = 56
-    state.player.local_base = 55
-    state.player.branch_support = 55
+    state.player.local_base = 52
+    state.player.branch_support = 52
     state.player.career_momentum = 5
     state.player.rival_threat = 40
-    engine._inject_career_opportunity_if_ready()
-    assert any("Assembly selection opening" == i.title for i in state.routine_items)
+    beat = _first_story_beat(engine)
+    while engine.state.current_slot != beat.time_slot:
+        engine.advance_time()
+    engine.choose_beat(beat.id, beat.decision_options[0].id)
+    assert state.career.assembly_selection_open is True
 
 
-def test_variables_change_only_from_decisions_or_ignored_items():
+def test_ignored_slot_items_get_closed_when_advancing():
     engine = SimulationEngine()
     state = engine.create_simulation()
-    before = state.player.reputation
+    open_ids = list(state.daily_agenda.beats_by_slot[state.current_slot])
     engine.advance_time()
-    assert state.player.reputation == before
-    item = engine.items_for_current_slot()[0]
-    engine.ignore_item(item.id)
-    assert any(i.status in {ItemStatus.EXPIRED, ItemStatus.HANDLED, ItemStatus.TAKEN_BY_OTHERS} for i in state.routine_items)
+    assert all(state.daily_beats[i].status in {BeatStatus.IGNORED, BeatStatus.TAKEN_BY_RIVAL, BeatStatus.RESOLVED} for i in open_ids)
