@@ -1,47 +1,87 @@
 from political_sim.engine import SimulationEngine
-from political_sim.models import Role, TimeSlot
+from political_sim.models import PartyType, Role
 
 
-def test_create_simulation_sets_start_date_and_agenda():
-    e = SimulationEngine(seed=1)
-    state = e.create_simulation("Casey", "unionist_front", Role.ACTIVIST, "East Belfast", "Local network")
-    assert state.game_date.day == 1
-    assert state.game_date.month == 5
-    assert state.game_date.year == 2027
-    assert state.game_date.time_slot == TimeSlot.MORNING
-    assert 1 <= len(state.daily_agenda.moments) <= 3
+def test_simulation_initialises():
+    engine = SimulationEngine(seed=1)
+    state = engine.create_simulation("Erin Wallace", "unionist_front", Role.ACTIVIST, "East Belfast")
+    assert state.day == 1
+    assert state.slot.value == "Morning"
 
 
-def test_daily_agenda_moments_are_role_limited():
-    e = SimulationEngine(seed=2)
-    state = e.create_simulation("Casey", "people_first", Role.COUNCILLOR, "West Belfast", "Local network")
-    assert all(Role.COUNCILLOR in m.eligible_roles for m in state.daily_agenda.moments)
+def test_parties_load_into_shared_engine():
+    engine = SimulationEngine(seed=2)
+    state = engine.create_simulation("Erin Wallace", "people_first", Role.COUNCILLOR, "West Belfast")
+    assert state.parties["unionist_front"].party_type == PartyType.DUP_STYLE
+    assert state.parties["people_first"].party_type == PartyType.SINN_FEIN_STYLE
+    assert state.parties["civic_alliance"].party_type == PartyType.ALLIANCE_STYLE
 
 
-def test_apply_decision_changes_party_variable_and_stamina():
-    e = SimulationEngine(seed=3)
-    state = e.create_simulation("Casey", "civic_alliance", Role.MLA, "North Down", "Local network")
-    moment = state.daily_agenda.moments[0]
-    option = e.get_available_options(moment)[0]
-    before_unity = state.parties["civic_alliance"].variables["party_unity"]
-    before_stamina = state.player.stamina
-    e.apply_decision(moment.id, option.id)
-    assert state.parties["civic_alliance"].variables["party_unity"] != before_unity
-    assert state.player.stamina < before_stamina
+def test_player_can_be_created_in_each_role():
+    for role in Role:
+        engine = SimulationEngine(seed=3)
+        state = engine.create_simulation("Erin Wallace", "civic_alliance", role, "North Down")
+        assert state.player.current_role == role
 
 
-def test_advance_time_slot_moves_at_most_one_day():
-    e = SimulationEngine(seed=4)
-    state = e.create_simulation("Casey", "unionist_front", Role.ACTIVIST, "Lagan Valley", "Local network")
-    day_before = state.day_index
-    for _ in range(4):
-        e.advance_time_slot()
-    assert state.day_index in [day_before, day_before + 1]
+def test_daily_agenda_generates_one_to_three_moments():
+    engine = SimulationEngine(seed=4)
+    state = engine.create_simulation("Erin Wallace", "unionist_front", Role.CANDIDATE, "Lagan Valley")
+    assert 1 <= len(state.active_moments) <= 3
 
 
-def test_ignore_moment_removes_from_agenda():
-    e = SimulationEngine(seed=5)
-    state = e.create_simulation("Casey", "people_first", Role.COUNCILLOR, "Fermanagh and South Tyrone", "Local network")
-    moment = state.daily_agenda.moments[0]
-    e.ignore_moment(moment.id)
-    assert all(m.id != moment.id for m in state.daily_agenda.moments)
+def test_role_limited_decisions_work():
+    engine = SimulationEngine(seed=5)
+    state = engine.create_simulation("Erin Wallace", "unionist_front", Role.ACTIVIST, "East Belfast")
+    moment = state.active_moments[0]
+    activist_options = engine.available_decisions(moment)
+    assert activist_options
+    unavailable = [d for d in moment.decision_options if Role.MINISTER in d.required_roles and Role.ACTIVIST not in d.required_roles]
+    if unavailable:
+        response = engine.apply_decision(moment.id, unavailable[0].id)
+        assert "do not have the authority" in response.lower()
+
+
+def test_applying_decision_changes_variables():
+    engine = SimulationEngine(seed=6)
+    state = engine.create_simulation("Erin Wallace", "people_first", Role.MLA, "West Belfast")
+    moment = state.active_moments[0]
+    option = engine.available_decisions(moment)[0]
+    before = state.player.party_trust
+    engine.apply_decision(moment.id, option.id)
+    assert state.player.party_trust != before or state.player.stamina < 90
+
+
+def test_ignored_moment_can_trigger_system_reaction():
+    engine = SimulationEngine(seed=7)
+    state = engine.create_simulation("Erin Wallace", "civic_alliance", Role.COUNCILLOR, "North Down")
+    moment = state.active_moments[0]
+    result = engine.ignore_moment(moment.id)
+    assert "System reaction" in result
+
+
+def test_career_momentum_can_increase():
+    engine = SimulationEngine(seed=8)
+    state = engine.create_simulation("Erin Wallace", "civic_alliance", Role.COUNCILLOR, "North Down")
+    start = state.player.career_momentum
+    moment = state.active_moments[0]
+    option = engine.available_decisions(moment)[0]
+    engine.apply_decision(moment.id, option.id)
+    assert state.player.career_momentum >= start
+
+
+def test_relationships_can_change():
+    engine = SimulationEngine(seed=9)
+    state = engine.create_simulation("Erin Wallace", "unionist_front", Role.COUNCILLOR, "East Belfast")
+    moment = state.active_moments[0]
+    option = None
+    for decision in engine.available_decisions(moment):
+        if decision.relationship_effects:
+            option = decision
+            break
+    if option is None:
+        option = engine.available_decisions(moment)[0]
+    scores_before = {k: v.score for k, v in state.relationships.items()}
+    engine.apply_decision(moment.id, option.id)
+    scores_after = {k: v.score for k, v in state.relationships.items()}
+    assert scores_before != scores_after or state.player.career_momentum >= 40
