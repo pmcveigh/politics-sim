@@ -11,13 +11,6 @@ class PartyType(str, Enum):
     CROSS_COMMUNITY = "cross_community"
 
 
-class TimeMode(str, Enum):
-    QUIET = "Quiet"
-    FORMAL_SESSION = "Formal Session"
-    CRISIS = "Crisis"
-    CAMPAIGN = "Campaign"
-
-
 class Role(str, Enum):
     ACTIVIST = "Activist"
     COUNCILLOR = "Councillor"
@@ -35,6 +28,44 @@ class InstitutionType(str, Enum):
     PARTY_EXECUTIVE = "Party Executive"
     MEDIA = "Media"
     CIVIL_SERVICE = "Civil Service"
+
+
+class TimeSlot(str, Enum):
+    MORNING = "Morning"
+    AFTERNOON = "Afternoon"
+    EVENING = "Evening"
+    LATE_NIGHT = "Late Night"
+
+
+class MomentCategory(str, Enum):
+    LOCAL_ISSUE = "Local Issue"
+    PARTY_MANAGEMENT = "Party Management"
+    MEDIA = "Media"
+    FORMAL_SESSION = "Formal Session"
+    CRISIS = "Crisis"
+    CAMPAIGN = "Campaign"
+    RELATIONSHIP = "Relationship"
+    CAREER_OPPORTUNITY = "Career Opportunity"
+    CONSTITUENCY_WORK = "Constituency Work"
+    BACKROOM_POLITICS = "Backroom Politics"
+
+
+class Urgency(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class GameDate:
+    day: int
+    month: int
+    year: int
+    time_slot: TimeSlot
+
+    def label(self) -> str:
+        return f"{self.day:02d}/{self.month:02d}/{self.year} ({self.time_slot.value})"
 
 
 @dataclass
@@ -99,7 +130,9 @@ class DecisionOption:
     effects_party: Dict[str, int]
     effects_relationships: Dict[str, int] = field(default_factory=dict)
     consequence_text: str = ""
-    delayed_effect_note: Optional[str] = None
+    stamina_cost: int = 10
+    advances_slots: int = 1
+    is_minor_action: bool = False
 
 
 @dataclass
@@ -107,15 +140,28 @@ class PoliticalMoment:
     id: str
     title: str
     description: str
-    time_mode: TimeMode
+    category: MomentCategory
+    time_slot: TimeSlot
+    urgency: Urgency
     eligible_roles: List[Role]
-    target_party_id: str
-    affected_variables: List[str]
+    party_tags: List[str]
+    constituency_tags: List[str]
+    institution_tags: List[str]
+    pressure_requirements: Dict[str, int]
     decision_options: List[DecisionOption]
-    consequence_text: str
-    relationship_effects: str
-    career_effects: str
-    delayed_effects: str = ""
+    ignored_effect: str
+    handled_by_system_effect: Optional[str]
+    expires_after_slots: int
+    can_escalate: bool
+    escalation_moment_id: Optional[str] = None
+    consequence_text: str = ""
+    created_day_index: int = 0
+
+
+@dataclass
+class DailyAgenda:
+    day_index: int
+    moments: List[PoliticalMoment] = field(default_factory=list)
 
 
 @dataclass
@@ -146,6 +192,7 @@ class PlayerState:
     faction_support: int = 50
     media_profile: int = 20
     career_momentum: int = 35
+    stamina: int = 100
     enemies: List[str] = field(default_factory=list)
     allies: List[str] = field(default_factory=list)
     relationships: Dict[str, Relationship] = field(default_factory=dict)
@@ -153,11 +200,12 @@ class PlayerState:
 
 @dataclass
 class SimulationState:
-    current_day: int
+    day_index: int
+    game_date: GameDate
     parties: Dict[str, Party]
     actors: Dict[str, Actor]
     constituencies: Dict[str, Constituency]
     institutions: Dict[str, Institution]
     player: PlayerState
     event_log: List[str] = field(default_factory=list)
-    current_moment: Optional[PoliticalMoment] = None
+    daily_agenda: DailyAgenda = field(default_factory=lambda: DailyAgenda(day_index=0))

@@ -1,151 +1,153 @@
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List
 
-from .models import DecisionOption, PoliticalMoment, Role, TimeMode
+from .models import DecisionOption, MomentCategory, PoliticalMoment, Role, TimeSlot, Urgency
 
-
-ROLE_SETS = {
-    "low": [Role.ACTIVIST, Role.COUNCILLOR, Role.CANDIDATE],
-    "mid": [Role.COUNCILLOR, Role.CANDIDATE, Role.MLA, Role.ADVISER],
-    "high": [Role.MLA, Role.ADVISER, Role.JUNIOR_MINISTER, Role.MINISTER],
-    "all": [
-        Role.ACTIVIST,
-        Role.COUNCILLOR,
-        Role.CANDIDATE,
-        Role.MLA,
-        Role.ADVISER,
-        Role.JUNIOR_MINISTER,
-        Role.MINISTER,
-    ],
-}
+ALL_ROLES = [r for r in Role]
+LOW_RANK = [Role.ACTIVIST, Role.COUNCILLOR, Role.CANDIDATE]
+MID_RANK = [Role.COUNCILLOR, Role.CANDIDATE, Role.MLA, Role.ADVISER]
+HIGH_RANK = [Role.MLA, Role.ADVISER, Role.JUNIOR_MINISTER, Role.MINISTER]
 
 
-def _options(prefix: str) -> List[DecisionOption]:
+def make_options(prefix: str, include_minor: bool = True) -> List[DecisionOption]:
+    options = [
+        DecisionOption(
+            id=f"{prefix}_main_line",
+            text="Take the lead and set a disciplined response.",
+            required_roles=ALL_ROLES,
+            effects_player={"party_trust": 3, "influence": 1},
+            effects_party={"party_unity": 2, "media_pressure": -1},
+            effects_relationships={"leader": 2},
+            consequence_text="Your line is adopted quickly.",
+            stamina_cost=12,
+            advances_slots=1,
+        ),
+        DecisionOption(
+            id=f"{prefix}_delegate",
+            text="Delegate and focus on another pressure point.",
+            required_roles=ALL_ROLES,
+            effects_player={"stamina": 4, "party_trust": -1},
+            effects_party={"party_unity": -1},
+            effects_relationships={"faction_rival": 2},
+            consequence_text="You conserve energy but lose control of tone.",
+            stamina_cost=3,
+            advances_slots=1,
+        ),
+    ]
+    if include_minor:
+        options.append(
+            DecisionOption(
+                id=f"{prefix}_minor_call",
+                text="Make quick calls to allies (minor action).",
+                required_roles=ALL_ROLES,
+                effects_player={"faction_support": 1},
+                effects_party={},
+                consequence_text="Allies are warmed up for later.",
+                stamina_cost=4,
+                advances_slots=0,
+                is_minor_action=True,
+            )
+        )
+    return options
+
+
+def build_moment_templates() -> List[Dict]:
     return [
-        DecisionOption(
-            id=f"{prefix}_discipline",
-            text="Stick to the party line and keep discipline.",
-            required_roles=ROLE_SETS["all"],
-            effects_player={"party_trust": 4, "leader_trust": 4, "influence": 1, "media_profile": -1},
-            effects_party={"party_unity": 3, "public_trust": 1},
-            effects_relationships={"leader": 5, "faction_rival": -2},
-            consequence_text="You reinforced discipline and avoided a split headline.",
-        ),
-        DecisionOption(
-            id=f"{prefix}_pivot",
-            text="Push a pragmatic compromise to steady the situation.",
-            required_roles=[Role.COUNCILLOR, Role.CANDIDATE, Role.MLA, Role.ADVISER, Role.JUNIOR_MINISTER, Role.MINISTER],
-            effects_player={"reputation": 2, "influence": 2, "party_trust": -1, "media_profile": 2},
-            effects_party={"government_credibility": 2, "party_unity": -1, "media_pressure": -1},
-            effects_relationships={"moderates": 4, "hardliners": -3},
-            consequence_text="You sold a compromise, gaining profile but irritating purists.",
-            delayed_effect_note="A future leadership briefing may revisit your compromise.",
-        ),
-        DecisionOption(
-            id=f"{prefix}_leak",
-            text="Brief allies off-record and leak pressure upwards.",
-            required_roles=[Role.ACTIVIST, Role.COUNCILLOR, Role.CANDIDATE, Role.ADVISER, Role.MLA],
-            effects_player={"influence": 3, "party_trust": -4, "leader_trust": -3, "career_momentum": 1},
-            effects_party={"media_pressure": 3, "faction_pressure": 2, "scandal_risk": 2},
-            effects_relationships={"leader": -5, "media": 3},
-            consequence_text="The leak landed. You matter more, but trust has thinned.",
-            delayed_effect_note="Enemies may brief against you in a later crisis.",
-        ),
+        {
+            "id": "local_canvass_dispute",
+            "title": "Canvassing route dispute",
+            "description": "Two branch teams clash over doorstep priorities in your patch.",
+            "category": MomentCategory.LOCAL_ISSUE,
+            "eligible_roles": LOW_RANK,
+            "institution_tags": ["Local Council"],
+            "urgency": Urgency.MEDIUM,
+        },
+        {
+            "id": "resident_complaint",
+            "title": "Resident complaint spikes online",
+            "description": "A local service complaint is gathering traction and needs visible handling.",
+            "category": MomentCategory.CONSTITUENCY_WORK,
+            "eligible_roles": [Role.COUNCILLOR, Role.MLA],
+            "institution_tags": ["Local Council"],
+            "urgency": Urgency.HIGH,
+        },
+        {
+            "id": "assembly_whip",
+            "title": "Whip instruction before vote",
+            "description": "Party managers issue strict attendance and line instructions for a formal vote.",
+            "category": MomentCategory.FORMAL_SESSION,
+            "eligible_roles": [Role.MLA, Role.JUNIOR_MINISTER, Role.MINISTER],
+            "institution_tags": ["Northern Ireland Assembly"],
+            "urgency": Urgency.HIGH,
+        },
+        {
+            "id": "hostile_journalist",
+            "title": "Hostile journalist requests comment",
+            "description": "A broadcaster asks for a rapid response on internal tensions.",
+            "category": MomentCategory.MEDIA,
+            "eligible_roles": MID_RANK + [Role.JUNIOR_MINISTER, Role.MINISTER],
+            "institution_tags": ["Media"],
+            "urgency": Urgency.HIGH,
+        },
+        {
+            "id": "department_failure",
+            "title": "Department delivery failure",
+            "description": "A public service failure requires immediate executive line-setting.",
+            "category": MomentCategory.CRISIS,
+            "eligible_roles": [Role.ADVISER, Role.JUNIOR_MINISTER, Role.MINISTER],
+            "institution_tags": ["Executive Department", "Civil Service"],
+            "urgency": Urgency.CRITICAL,
+        },
+        {
+            "id": "faction_call",
+            "title": "Late-night faction call",
+            "description": "Faction organisers demand clarity before tomorrow's briefing.",
+            "category": MomentCategory.BACKROOM_POLITICS,
+            "eligible_roles": ALL_ROLES,
+            "institution_tags": ["Party Executive"],
+            "urgency": Urgency.MEDIUM,
+        },
+        {
+            "id": "campaign_leaflet",
+            "title": "Leaflet wording row",
+            "description": "Campaign teams dispute wording that could alienate a local bloc.",
+            "category": MomentCategory.CAMPAIGN,
+            "eligible_roles": LOW_RANK + [Role.MLA],
+            "institution_tags": ["Party Executive"],
+            "urgency": Urgency.LOW,
+        },
+        {
+            "id": "career_offer",
+            "title": "Quiet approach about a promotion track",
+            "description": "A senior figure tests whether you would accept a bigger internal role.",
+            "category": MomentCategory.CAREER_OPPORTUNITY,
+            "eligible_roles": MID_RANK + [Role.JUNIOR_MINISTER],
+            "institution_tags": ["Party Executive"],
+            "urgency": Urgency.MEDIUM,
+        },
     ]
 
 
-def create_moments() -> List[PoliticalMoment]:
-    dup_titles = [
-        "Constitutional pressure spike",
-        "Business donors warn over instability",
-        "Candidate selection fight",
-        "Media gaffe from social conservative figure",
-        "Stormont delivery crisis",
-        "Westminster leverage opportunity",
-        "Hardline flank pressure",
-        "Local loyalist community meeting",
-        "Leadership briefing on discipline",
-        "Council flag dispute",
-    ]
-    sf_titles = [
-        "Border poll pressure builds",
-        "Legacy issue returns to headlines",
-        "Dublin credibility test",
-        "Housing policy flashpoint",
-        "Activist controversy",
-        "Stormont delivery crunch",
-        "Candidate selection dispute",
-        "Republican credentials challenged",
-        "Southern media scrutiny",
-        "Leadership strategy briefing",
-    ]
-    al_titles = [
-        "Cross-community messaging test",
-        "Tactical vote squeeze",
-        "Both sides attack neutrality",
-        "Liberal social issue backlash",
-        "Candidate overstretch in unionist area",
-        "Council delivery opportunity",
-        "Media praise raises expectations",
-        "Young urban wing demands stronger line",
-        "Executive participation dilemma",
-        "Leadership positioning row",
-    ]
-
-    moments: List[PoliticalMoment] = []
-    for idx, title in enumerate(dup_titles, start=1):
-        mode = [TimeMode.CRISIS, TimeMode.FORMAL_SESSION, TimeMode.QUIET, TimeMode.CAMPAIGN][idx % 4]
-        moments.append(
-            PoliticalMoment(
-                id=f"dup_{idx}",
-                title=title,
-                description=f"Unionist Front confronts: {title.lower()}. You are one actor, not the commanding centre.",
-                time_mode=mode,
-                eligible_roles=ROLE_SETS["all"],
-                target_party_id="unionist_front",
-                affected_variables=["party_unity", "constitutional_pressure", "media_pressure"],
-                decision_options=_options(f"dup_{idx}"),
-                consequence_text="Party actors react to your move and continue manoeuvring without waiting on you.",
-                relationship_effects="Leader trust and factional support can shift.",
-                career_effects="Solid handling can unlock candidate or committee pathways.",
-                delayed_effects="Leaked or compromised choices may resurface in later briefings.",
-            )
-        )
-    for idx, title in enumerate(sf_titles, start=1):
-        mode = [TimeMode.QUIET, TimeMode.CRISIS, TimeMode.FORMAL_SESSION, TimeMode.CAMPAIGN][idx % 4]
-        moments.append(
-            PoliticalMoment(
-                id=f"sf_{idx}",
-                title=title,
-                description=f"People First Movement faces: {title.lower()}. Internal factions expect different responses.",
-                time_mode=mode,
-                eligible_roles=ROLE_SETS["all"],
-                target_party_id="people_first",
-                affected_variables=["party_unity", "legacy_pressure", "stormont_stability"],
-                decision_options=_options(f"sf_{idx}"),
-                consequence_text="Your action nudges the machine, then organisers, media, and rivals carry on.",
-                relationship_effects="Old-guard and pragmatist links can diverge.",
-                career_effects="Momentum can open advisory or ministerial eligibility later.",
-                delayed_effects="Legacy and media choices may return during campaign mode.",
-            )
-        )
-    for idx, title in enumerate(al_titles, start=1):
-        mode = [TimeMode.FORMAL_SESSION, TimeMode.QUIET, TimeMode.CAMPAIGN, TimeMode.CRISIS][idx % 4]
-        moments.append(
-            PoliticalMoment(
-                id=f"all_{idx}",
-                title=title,
-                description=f"Civic Alliance is tested by: {title.lower()}. Balancing both sides remains difficult.",
-                time_mode=mode,
-                eligible_roles=ROLE_SETS["all"],
-                target_party_id="civic_alliance",
-                affected_variables=["cross_community_credibility", "both_sides_pressure", "tactical_vote_pressure"],
-                decision_options=_options(f"all_{idx}"),
-                consequence_text="You influence tone and positioning, but party dynamics continue independently.",
-                relationship_effects="Idealists and pragmatists remember your line.",
-                career_effects="Strong performance can create candidacy or committee opportunities.",
-                delayed_effects="Overextension and expectations can trigger later crisis moments.",
-            )
-        )
-    return moments
+def create_moment_from_template(template: Dict, party_id: str, constituency: str, slot: TimeSlot, day_index: int) -> PoliticalMoment:
+    return PoliticalMoment(
+        id=f"{template['id']}_{day_index}_{slot.name.lower()}",
+        title=template["title"],
+        description=template["description"],
+        category=template["category"],
+        time_slot=slot,
+        urgency=template["urgency"],
+        eligible_roles=template["eligible_roles"],
+        party_tags=[party_id],
+        constituency_tags=[constituency],
+        institution_tags=template["institution_tags"],
+        pressure_requirements={"media_pressure": 40},
+        decision_options=make_options(template["id"]),
+        ignored_effect="The issue moves without you and may empower a rival.",
+        handled_by_system_effect="Another actor handled it first and gains credit.",
+        expires_after_slots=2,
+        can_escalate=template["urgency"] in [Urgency.HIGH, Urgency.CRITICAL],
+        escalation_moment_id="department_failure" if template["id"] != "department_failure" else None,
+        consequence_text="The system absorbs your move and continues independently.",
+        created_day_index=day_index,
+    )
