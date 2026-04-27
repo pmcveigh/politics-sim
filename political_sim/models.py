@@ -7,13 +7,10 @@ from typing import Dict, List, Optional
 
 
 class Role(str, Enum):
-    ACTIVIST = "Activist"
     COUNCILLOR = "Councillor"
     CANDIDATE = "Candidate"
     MLA = "MLA"
-    ADVISER = "Adviser"
     JUNIOR_MINISTER = "Junior Minister"
-    MINISTER = "Minister"
 
 
 class TimeSlot(str, Enum):
@@ -23,15 +20,27 @@ class TimeSlot(str, Enum):
     LATE_NIGHT = "Late Night"
 
 
+class RoutineCategory(str, Enum):
+    CASEWORK = "Casework"
+    COUNCIL_BUSINESS = "Council Business"
+    COMMITTEE_WORK = "Committee Work"
+    OFFICER_FOLLOW_UP = "Officer Follow-Up"
+    PARTY_GROUP = "Party Group"
+    BRANCH_POLITICS = "Branch Politics"
+    COMMUNITY_EVENT = "Community Event"
+    WARD_VISIBILITY = "Ward Visibility"
+    LOCAL_MEDIA = "Local Media"
+    SOCIAL_MEDIA = "Social Media"
+    RIVAL_ACTIVITY = "Rival Activity"
+    PERSONAL_CAPACITY = "Personal Capacity"
+    CAREER_POSITIONING = "Career Positioning"
+
+
 class MomentCategory(str, Enum):
-    CONSTITUENCY_WORK = "Constituency Work"
-    FORMAL_SESSION = "Formal Session"
-    MEDIA = "Media"
-    CAREER_OPPORTUNITY = "Career Opportunity"
-    BACKROOM_POLITICS = "Backroom Politics"
-    RELATIONSHIP_REACTION = "Relationship/System Reaction"
-    CAMPAIGN = "Campaign"
-    CRISIS = "Crisis"
+    ROUTINE = "Routine"
+    ESCALATION = "Escalation"
+    CAREER = "Career"
+    REACTION = "Reaction"
 
 
 class Urgency(str, Enum):
@@ -43,27 +52,40 @@ class Urgency(str, Enum):
 
 class InstitutionType(str, Enum):
     LOCAL_COUNCIL = "Local Council"
-    ASSEMBLY = "Assembly"
-    PARTY_HQ = "Party HQ"
+    PARTY = "Party"
     MEDIA = "Media"
-    EXECUTIVE = "Executive"
+    COMMUNITY = "Community"
 
 
 class PartyType(str, Enum):
-    UNIONIST = "DUP-style"
-    REPUBLICAN = "Sinn Féin-style"
-    CROSS_COMMUNITY = "Alliance-style"
+    UNIONIST = "Unionist"
+    REPUBLICAN = "Republican"
+    CROSS_COMMUNITY = "Cross-Community"
 
 
 class DecisionType(str, Enum):
-    PARTY_LINE = "Party Line"
-    LOCALIST = "Localist"
-    COMPROMISE = "Compromise"
-    PROFILE_BUILDING = "Profile Building"
-    LOYALIST = "Loyalist"
-    FACTIONAL = "Factional"
-    CAREER = "Career"
-    DEFENSIVE = "Defensive"
+    HANDLE = "Handle"
+    POSITION = "Position"
+    ESCALATE = "Escalate"
+    IGNORE = "Ignore"
+
+
+class HandlingStyle(str, Enum):
+    QUIET_ADMIN = "Quiet Administrative"
+    PERSONAL_WARD_WORK = "Personal Ward Work"
+    PUBLIC_CAMPAIGNING = "Public Campaigning"
+    PARTY_ESCALATION = "Party Escalation"
+    CROSS_PARTY_DEAL = "Cross-Party Deal"
+    MEDIA_PLAY = "Media Play"
+    DELAY_IGNORE = "Delay / Ignore"
+    HONEST_REFUSAL = "Honest Refusal"
+
+
+class ItemStatus(str, Enum):
+    OPEN = "Open"
+    HANDLED = "Handled"
+    EXPIRED = "Expired"
+    TAKEN_BY_OTHERS = "Taken by Others"
 
 
 @dataclass
@@ -71,18 +93,6 @@ class Party:
     id: str
     name: str
     party_type: PartyType
-    leader_actor_id: str
-    party_unity: int
-    leader_authority: int
-    activist_morale: int
-    public_trust: int
-    media_pressure: int
-    scandal_risk: int
-    election_readiness: int
-    faction_pressure: int
-    government_credibility: int
-    local_machine_strength: int
-    custom_variables: Dict[str, int]
 
 
 @dataclass
@@ -90,12 +100,7 @@ class Faction:
     id: str
     party_id: str
     name: str
-    strength: int
-    loyalty_to_leader: int
-    agitation: int
-    relationship_with_player: int
-    preferred_decision_types: List[DecisionType]
-    disliked_decision_types: List[DecisionType]
+    pressure: int
 
 
 @dataclass
@@ -104,21 +109,6 @@ class Actor:
     name: str
     role: Role
     party_id: str
-    constituency_id: str
-    faction_id: str
-    reputation: int
-    competence: int
-    ambition: int
-    loyalty_to_party: int
-    loyalty_to_leader: int
-    faction_loyalty: int
-    media_skill: int
-    local_machine_strength: int
-    ideological_intensity: int
-    scandal_risk: int
-    stamina: int
-    career_momentum: int
-    influence: int
 
 
 @dataclass
@@ -128,31 +118,38 @@ class Player:
     role: Role
     party_id: str
     constituency_id: str
-    stamina: int
-    influence: int
     reputation: int
-    local_base: int
-    party_trust: int
-    leader_trust: int
-    media_profile: int
+    influence: int
+    stamina: int
+    casework_backlog: int
+    resident_trust: int
+    local_media_profile: int
+    branch_support: int
+    party_group_trust: int
+    officer_relationship: int
+    rival_threat: int
+    social_media_volatility: int
+    ward_visibility: int
+    committee_credibility: int
+    local_issue_pressure: int
     career_momentum: int
+    local_base: int
 
 
 @dataclass
 class Constituency:
     id: str
     name: str
-    unionist_strength: int
-    nationalist_strength: int
-    cross_community_strength: int
+    local_issue_pressure: int
+    local_media_heat: int
+    turnout_energy: int
     working_class_pressure: int
     middle_class_pressure: int
     rural_pressure: int
     urban_pressure: int
-    local_issue_pressure: int
-    turnout_energy: int
-    local_media_heat: int
     current_flashpoint: str
+    resident_satisfaction: int
+    council_service_pressure: int
     party_machine_strength: Dict[str, int]
 
 
@@ -165,8 +162,7 @@ class Institution:
 
 @dataclass
 class Relationship:
-    source_id: str
-    target_id: str
+    id: str
     label: str
     score: int
 
@@ -175,14 +171,36 @@ class Relationship:
 class Decision:
     id: str
     label: str
-    description: str
     decision_type: DecisionType
+    handling_style: HandlingStyle
     allowed_roles: List[Role]
+    stamina_cost: int
+    is_minor: bool
     effects: Dict[str, int]
     relationship_effects: Dict[str, int]
-    career_effects: Dict[str, int]
     result_text: str
-    time_advance: int = 1
+
+
+@dataclass
+class RoutineItem:
+    id: str
+    title: str
+    description: str
+    category: RoutineCategory
+    time_slot: TimeSlot
+    urgency: Urgency
+    workload_cost: int
+    stamina_cost: int
+    influence_cost: int
+    expires_after_slots: int
+    involved_actor_ids: List[str]
+    involved_relationships: List[str]
+    linked_constituency_id: str
+    possible_decisions: List[Decision]
+    ignored_effect: Dict[str, int]
+    escalation: str
+    status: ItemStatus = ItemStatus.OPEN
+    slots_remaining: int = 1
 
 
 @dataclass
@@ -191,33 +209,31 @@ class Moment:
     title: str
     description: str
     category: MomentCategory
-    urgency: Urgency
-    eligible_roles: List[Role]
-    expiry_slots: int
-    involved_actor_ids: List[str]
-    involved_faction_ids: List[str]
-    risk_preview: str
-    decision_options: List[Decision]
-    ignored_effects: Dict[str, int]
-    ignored_relationship_effects: Dict[str, int]
-    ignored_text: str
-    system_reaction: str
+    source_item_id: Optional[str]
 
 
 @dataclass
 class CareerState:
     current_role: Role
-    survived_party_crisis: bool = False
-    candidate_selected: bool = False
-    became_mla: bool = False
-    promotion_offers: List[Role] = field(default_factory=list)
-    recent_events: List[str] = field(default_factory=list)
+    path_target: Role = Role.MLA
+    assembly_selection_open: bool = False
+
+
+@dataclass
+class DailyAgenda:
+    date: date
+    day_name: str
+    routine_obligation_id: str
+    opportunity_id: str
+    complication_id: str
+    items_by_slot: Dict[TimeSlot, List[str]] = field(default_factory=dict)
 
 
 @dataclass
 class SimulationState:
     current_date: date
     time_slot: TimeSlot
+    day_index: int
     parties: Dict[str, Party]
     factions: Dict[str, Faction]
     actors: Dict[str, Actor]
@@ -226,9 +242,13 @@ class SimulationState:
     institutions: Dict[str, Institution]
     relationships: Dict[str, Relationship]
     career: CareerState
-    active_moments: List[Moment]
-    current_result: Optional[str] = None
-    event_log: List[str] = field(default_factory=list)
+    routine_items: List[RoutineItem]
+    moments: List[Moment]
+    daily_agenda: DailyAgenda
+    event_log: List[str]
+    current_result: str = ""
+    main_actions_used: int = 0
+    minor_actions_used: int = 0
 
     def datetime_label(self) -> str:
-        return f"{self.current_date.isoformat()} {self.time_slot.value}"
+        return f"{self.current_date.isoformat()} ({self.current_date.strftime('%A')}) - {self.time_slot.value}"

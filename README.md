@@ -1,9 +1,12 @@
 # political-sim
 
-See project docs in `political_sim/README.md`.
+Councillor-focused Northern Ireland political routine simulator (PySide6 desktop MVP).
 
 Run:
 
 ```bash
 python -m political_sim.main
 ```
+
+Project docs:
+- `political_sim/README.md`
