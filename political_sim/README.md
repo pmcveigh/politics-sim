@@ -1,52 +1,47 @@
-# Northern Ireland Political Simulator - MVP-of-the-MVP
+# Northern Ireland Councillor Routine Simulator (MVP)
 
-## What this prototype is
-A compact, event-driven desktop prototype built with **Python + PySide6**. You play one actor inside a live political machine. Politics moves with or without you.
+## Focus
+This MVP is councillor-first. You start as a **Councillor**, and gameplay revolves around ordinary political routine rather than random dramatic events.
 
-## Install
-```bash
-python -m pip install PySide6
-```
+Core loop:
+
+1. Start day
+2. Review inbox and agenda
+3. Choose what to handle
+4. Decide how to handle it
+5. System reacts
+6. Unresolved items escalate or are handled by others
+7. Time advances
+8. Repeat
 
 ## Run
 ```bash
+python -m pip install PySide6
 python -m political_sim.main
 ```
 
-## Stage 1 includes
-- GUI with persistent layout:
-  - Left nav: Dashboard, Inbox, Party, Factions, Actors, Constituency, Relationships, Career, Log.
-  - Top bar: date, time slot, player identity and core stats.
-  - Main panel: selected screen.
-  - Right panel: context summary and warnings.
-- Default start:
-  - Fictional player.
-  - **Councillor**.
-  - **Civic Alliance Party**.
-  - **North Down**.
-- Event-driven time slots: Morning, Afternoon, Evening, Late Night.
-- 12 core political moments for the intended path:
-  - Councillor -> Candidate -> MLA -> crisis survivor -> junior minister offer.
-- Role-limited decisions (invalid decisions hidden).
-- Ignore handling with independent system reactions and rival gains.
-- Decision Result view with visible consequences.
-- Chronological event log.
+## Design principles
+- Structured daily agenda with:
+  - one routine obligation,
+  - one optional opportunity,
+  - one possible complication.
+- Time slots: Morning, Afternoon, Evening, Late Night.
+- Event-driven consequences only (no passive weekly stat drift).
+- Choices are about **handling style** (quiet admin, personal ward work, media play, escalation, delay/ignore, etc.).
+- Rival councillor can gain from unhandled visible issues.
+- Council officers, party group, branch, local media, and residents' relationships matter.
 
-## Intentionally not included
-- Full UK simulation.
-- Full election model.
-- Real politicians.
-- Passive weekly stat drift.
-- Database/save system.
+## Career path (still MVP)
+Path remains:
 
-## Event-driven consequences
-Variables change only when moments are handled or ignored. The simulation does **not** apply passive weekly stat decay.
+**Councillor -> Candidate -> MLA -> Junior Minister**
 
-## Career path logic
-Progression is gated by thresholds and events.
-- Candidate selection checks reputation, local base, branch relationship and momentum.
-- MLA status is triggered through election result moments.
-- Junior minister is an offer moment and can be accepted or declined.
+Assembly selection opportunity appears only when routine-based thresholds are met (reputation, local base, branch support, momentum, and manageable rival threat).
 
-## The player is a cog in a system
-Ignoring moments can help rivals, reduce trust, and trigger consequences. The machine keeps moving whether you intervene or not.
+## Included screens
+- Dashboard
+- Inbox
+- Routine (grouped by time slot)
+- Party / Factions / Actors / Constituency / Relationships / Career
+- Decision Result
+- Log
