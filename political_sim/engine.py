@@ -1,397 +1,244 @@
 from __future__ import annotations
 
-import random
+from datetime import date, timedelta
 from typing import Dict, List, Optional
 
-from .data_moments import create_moment_from_template, build_moment_templates
-from .data_parties import build_actors, build_constituencies, build_factions, build_institutions, build_parties
-from .models import (
-    Actor,
-    CareerState,
-    Decision,
-    Moment,
-    Player,
-    Relationship,
-    Role,
-    SimulationState,
-    TimeSlot,
-    Urgency,
-)
+from .data import build_actors, build_constituencies, build_factions, build_institutions, build_moments, build_parties, build_relationships
+from .models import CareerState, Decision, Moment, Player, Role, SimulationState, TimeSlot
 
 SLOT_ORDER = [TimeSlot.MORNING, TimeSlot.AFTERNOON, TimeSlot.EVENING, TimeSlot.LATE_NIGHT]
-ROLE_POWER = {
-    Role.ACTIVIST: 8,
-    Role.COUNCILLOR: 20,
-    Role.CANDIDATE: 18,
-    Role.MLA: 35,
-    Role.ADVISER: 30,
-    Role.JUNIOR_MINISTER: 45,
-    Role.MINISTER: 58,
-}
 
 
 class SimulationEngine:
-    def __init__(self, seed: Optional[int] = None) -> None:
-        self.random = random.Random(seed)
-        self.templates = build_moment_templates()
+    def __init__(self) -> None:
+        self.moment_catalog = {m.id: m for m in build_moments()}
         self.state: Optional[SimulationState] = None
+        self.pending_chain: List[str] = []
 
-    def create_simulation(self, player_name: str, party_id: str, role: Role, constituency_name: str) -> SimulationState:
+    def create_simulation(self, player_name: str = "Alex Mercer", party_id: str = "cap", role: Role = Role.COUNCILLOR, constituency_id: str = "north_down") -> SimulationState:
         parties = build_parties()
-        factions = build_factions()
         actors = build_actors()
+        factions = build_factions()
         constituencies = build_constituencies()
         institutions = build_institutions()
 
-        player_actor_id = "player_actor"
-        actors[player_actor_id] = Actor(
-            id=player_actor_id,
+        player = Player(
+            actor_id="player",
             name=player_name,
             role=role,
             party_id=party_id,
-            constituency_id=constituencies[constituency_name].id,
-            faction_id=self._pick_player_faction_id(party_id, factions),
-            reputation=50,
-            competence=52,
-            ambition=60,
-            loyalty_to_party=52,
-            loyalty_to_leader=48,
-            faction_loyalty=50,
-            media_skill=48,
-            local_machine_strength=50,
-            ideological_intensity=54,
-            scandal_risk=35,
-            stamina=90,
-            career_momentum=40,
-            influence=0,
+            constituency_id=constituency_id,
+            stamina=88,
+            influence=26,
+            reputation=52,
+            local_base=50,
+            party_trust=52,
+            leader_trust=50,
+            media_profile=35,
+            career_momentum=5,
         )
-        actor = actors[player_actor_id]
-        career = CareerState(current_role=role)
-        player = Player(
-            actor_id=player_actor_id,
-            current_role=role,
-            stamina=90,
-            local_base=45,
-            party_trust=48,
-            leader_trust=45,
-            faction_support=48,
-            media_profile=24,
-            career_momentum=40,
-            allies=[],
-            enemies=[],
-            career_state=career,
-            available_actions=[],
-        )
-        relationships = self._initial_relationships(player_actor_id, party_id, factions)
+        actors[player.actor_id] = actors.get("cap_councillor")
+        actors[player.actor_id].id = "player"
+        actors[player.actor_id].name = player_name
+        actors[player.actor_id].party_id = party_id
+        actors[player.actor_id].role = role
+        actors[player.actor_id].constituency_id = constituency_id
 
         self.state = SimulationState(
-            day=1,
-            month=5,
-            year=2027,
-            slot=TimeSlot.MORNING,
+            current_date=date(2027, 5, 1),
+            time_slot=TimeSlot.MORNING,
             parties=parties,
             factions=factions,
             actors=actors,
             player=player,
             constituencies=constituencies,
             institutions=institutions,
-            relationships=relationships,
+            relationships=build_relationships("player", party_id),
+            career=CareerState(current_role=role),
             active_moments=[],
-            event_log=[],
+            event_log=["Simulation started. You are one actor in a moving system."],
         )
-        self._recalculate_actor_influence()
-        self._update_player_available_actions()
-        self.generate_daily_agenda()
-        self.state.event_log.append("Simulation started on 1 May 2027.")
+        self.pending_chain = [
+            "local_planning_row",
+            "council_rebellion",
+            "local_media_interview",
+            "candidate_selection_opening",
+            "faction_dinner",
+            "rival_handles_issue",
+            "assembly_campaign_launch",
+            "debate_night",
+            "election_result",
+            "first_assembly_vote",
+            "party_crisis_briefing",
+        ]
+        self.generate_agenda()
         return self.state
 
-    def _pick_player_faction_id(self, party_id: str, factions: Dict[str, object]) -> str:
-        options = [f.id for f in factions.values() if f.party_id == party_id]
-        return options[0]
+    def generate_agenda(self) -> List[Moment]:
+        assert self.state
+        agenda: List[Moment] = []
+        if self.pending_chain:
+            agenda.append(self._clone(self.pending_chain[0]))
+        if len(self.pending_chain) > 1:
+            agenda.append(self._clone(self.pending_chain[1]))
+        if self._eligible_for_junior_minister() and "junior_minister_offer" not in [m.id for m in agenda]:
+            agenda.append(self._clone("junior_minister_offer"))
+        self.state.active_moments = agenda
+        return agenda
 
-    def _initial_relationships(self, player_actor_id: str, party_id: str, factions: Dict[str, object]) -> Dict[str, Relationship]:
-        rels: Dict[str, Relationship] = {
-            "leader": Relationship(player_actor_id, f"leader_{party_id}", 50, "Party leader"),
-            "local_branch": Relationship(player_actor_id, f"branch_{party_id}", 52, "Local branch"),
-            "media": Relationship(player_actor_id, "journalist_pool", 45, "Media contacts"),
-        }
-        for faction in [f for f in factions.values() if f.party_id == party_id]:
-            rels[f"faction:{faction.id}"] = Relationship(player_actor_id, faction.id, 47, faction.name)
-        return rels
-
-    def _recalculate_actor_influence(self) -> None:
-        assert self.state is not None
-        for actor in self.state.actors.values():
-            relation_bonus = 0
-            if actor.id == self.state.player.actor_id:
-                relation_bonus = sum(r.score for r in self.state.relationships.values()) // max(1, len(self.state.relationships))
-            actor.influence = max(
-                0,
-                min(
-                    100,
-                    ROLE_POWER[actor.role]
-                    + actor.reputation // 5
-                    + actor.career_momentum // 4
-                    + actor.faction_loyalty // 6
-                    + relation_bonus // 8,
-                ),
-            )
-
-    def _update_player_available_actions(self) -> None:
-        assert self.state is not None
-        role = self.state.player.current_role
-        base = {
-            Role.ACTIVIST: ["canvass", "build branch influence", "attend local meetings", "spread gossip", "support candidates", "leak local information"],
-            Role.COUNCILLOR: ["handle local issues", "influence local media", "court branches", "fight council votes", "support selection"],
-            Role.CANDIDATE: ["campaign", "raise profile", "court branches", "attack opponents", "manage scandals"],
-            Role.MLA: ["vote", "rebel", "ask questions", "join committees", "lobby ministers", "court media"],
-            Role.ADVISER: ["shape messaging", "brief journalists", "prepare leaders", "leak", "protect actors", "damage actors"],
-            Role.JUNIOR_MINISTER: ["handle narrow policy", "manage small crises", "work with civil service", "defend department"],
-            Role.MINISTER: ["handle major crises", "set departmental priorities", "manage media", "fight executive disputes"],
-        }
-        self.state.player.available_actions = base[role]
-
-    def generate_daily_agenda(self) -> List[Moment]:
-        assert self.state is not None
-        party = self.state.parties[self.state.actors[self.state.player.actor_id].party_id]
-        constituency = self.player_constituency
-        pressure = party.media_pressure + party.faction_pressure + constituency.local_issue_pressure // 2
-        base_count = 1 if pressure < 120 else 2
-        if pressure > 155 or self.state.player.stamina > 82:
-            base_count = 3
-
-        slots = SLOT_ORDER[:]
-        party_templates = [t for t in self.templates if t["party_type"] == party.party_type]
-        selected = self.random.sample(party_templates, k=base_count)
-        self.state.active_moments = [
-            create_moment_from_template(
-                tmpl,
-                day=self.state.day,
-                slot=slots[i],
-                slot_index=i,
-                party_id=party.id,
-                constituency_name=constituency.name,
-                faction_name=self.state.factions[self.state.actors[self.state.player.actor_id].faction_id].name,
-            )
-            for i, tmpl in enumerate(selected)
-        ]
-        return self.state.active_moments
-
-    @property
-    def player_constituency(self):
-        assert self.state is not None
-        actor = self.state.actors[self.state.player.actor_id]
-        return next(c for c in self.state.constituencies.values() if c.id == actor.constituency_id)
-
-    def get_moment_by_id(self, moment_id: str) -> Moment:
-        assert self.state is not None
-        for moment in self.state.active_moments:
-            if moment.id == moment_id:
-                return moment
-        raise ValueError("Moment not found.")
+    def _clone(self, moment_id: str) -> Moment:
+        base = self.moment_catalog[moment_id]
+        return Moment(**{k: v for k, v in base.__dict__.items()})
 
     def available_decisions(self, moment: Moment) -> List[Decision]:
-        role = self.state.player.current_role  # type: ignore[union-attr]
-        return [d for d in moment.decision_options if role in d.required_roles]
-
-    def role_authority_message(self) -> str:
-        return "You do not have the authority to do this. You can lobby, leak, support or oppose, but you cannot command party strategy from your current role."
+        return [d for d in moment.decision_options if self.state and self.state.player.role in d.allowed_roles]
 
     def apply_decision(self, moment_id: str, decision_id: str) -> str:
-        assert self.state is not None
-        moment = self.get_moment_by_id(moment_id)
+        assert self.state
+        moment = self._get_moment(moment_id)
         options = {d.id: d for d in self.available_decisions(moment)}
         if decision_id not in options:
-            return self.role_authority_message()
+            return "You do not have authority for that action at your current rank."
         decision = options[decision_id]
-        if self.state.player.stamina < decision.stamina_cost:
-            return "You are too exhausted for that move. Consider a lighter response or defer the moment."
 
-        self._apply_effects(decision)
-        self.state.player.stamina = max(0, self.state.player.stamina - decision.stamina_cost)
-        self._consume_moment(moment.id)
-        reaction = self._generate_system_reaction(moment, handled=True)
+        self._apply_effect_map(decision.effects)
+        self._apply_relationship_map(decision.relationship_effects)
+        self._apply_career(decision.career_effects)
         self._advance_time(decision.time_advance)
-        self._check_career_opportunity()
-        self._recalculate_actor_influence()
+        self._post_moment_progression(moment.id, decision.id)
 
-        change_lines = self._describe_effects(decision)
-        result = (
-            f"Decision: {decision.label}\n"
-            f"Immediate result: {decision.consequence_text}\n"
-            f"Likely risk: {decision.risk_level}/100\n"
-            f"Changes:\n{change_lines}\n"
-            f"System reaction:\n- {reaction}\n"
-            f"Time advances to {self.state.slot.value}."
-        )
+        result = self._build_result(moment, decision)
+        self.state.current_result = result
         self.state.event_log.append(result)
+        self.generate_agenda()
         return result
 
-    def _apply_effects(self, decision: Decision) -> None:
-        assert self.state is not None
-        for key, delta in decision.effects.items():
-            self._apply_effect_key(key, delta)
-        for key, delta in decision.relationship_effects.items():
-            if key.startswith("faction:"):
-                faction_id = key.split(":", 1)[1]
-                rel_key = f"faction:{faction_id}"
-                if rel_key in self.state.relationships:
-                    self.state.relationships[rel_key].score = max(0, min(100, self.state.relationships[rel_key].score + delta))
-        for key, delta in decision.career_effects.items():
-            if hasattr(self.state.player.career_state, key):
-                old = getattr(self.state.player.career_state, key)
-                if isinstance(old, int):
-                    setattr(self.state.player.career_state, key, max(0, min(100, old + delta)))
-
-    def _apply_effect_key(self, key: str, delta: int) -> None:
-        assert self.state is not None
-        party = self.state.parties[self.state.actors[self.state.player.actor_id].party_id]
-        constituency = self.player_constituency
-        player = self.state.player
-        actor = self.state.actors[player.actor_id]
-
-        if key.startswith("party.custom."):
-            ckey = key.replace("party.custom.", "")
-            if ckey in party.custom_variables:
-                party.custom_variables[ckey] = max(0, min(100, party.custom_variables[ckey] + delta))
-            return
-        if key.startswith("party."):
-            attr = key.replace("party.", "")
-            if hasattr(party, attr):
-                setattr(party, attr, max(0, min(100, getattr(party, attr) + delta)))
-            return
-        if key.startswith("player."):
-            attr = key.replace("player.", "")
-            if hasattr(player, attr):
-                setattr(player, attr, max(0, min(100, getattr(player, attr) + delta)))
-            elif hasattr(actor, attr):
-                setattr(actor, attr, max(0, min(100, getattr(actor, attr) + delta)))
-            return
-        if key.startswith("constituency."):
-            attr = key.replace("constituency.", "")
-            if hasattr(constituency, attr):
-                setattr(constituency, attr, max(0, min(100, getattr(constituency, attr) + delta)))
-            return
-
-    def _describe_effects(self, decision: Decision) -> str:
-        lines = [f"- Player stamina -{decision.stamina_cost}"]
-        for key, delta in decision.effects.items():
-            lines.append(f"- {key} {delta:+d}")
-        for key, delta in decision.relationship_effects.items():
-            lines.append(f"- relationship {key} {delta:+d}")
-        for key, delta in decision.career_effects.items():
-            lines.append(f"- career {key} {delta:+d}")
-        return "\n".join(lines)
-
-    def _consume_moment(self, moment_id: str) -> None:
-        assert self.state is not None
-        self.state.active_moments = [m for m in self.state.active_moments if m.id != moment_id]
-
-    def ignore_moment(self, moment_id: str, defer: bool = False) -> str:
-        assert self.state is not None
-        moment = self.get_moment_by_id(moment_id)
-        if defer:
-            self._advance_time(1)
-            self.state.event_log.append(f"Deferred moment: {moment.title}.")
-            return f"Deferred: {moment.title}. It may worsen before you return to it."
-
-        self._consume_moment(moment.id)
-        self.state.player.party_trust = max(0, self.state.player.party_trust - (3 if moment.urgency in [Urgency.HIGH, Urgency.CRITICAL] else 1))
-        reaction = self._generate_system_reaction(moment, handled=False)
-        self.state.event_log.append(f"Ignored: {moment.title}. {moment.ignored_effect} {reaction}")
-        return f"Ignored: {moment.title}. {moment.ignored_effect}\nSystem reaction: {reaction}"
-
-    def _generate_system_reaction(self, moment: Moment, handled: bool) -> str:
-        assert self.state is not None
-        pool = [
-            "A senior adviser notes your loyalty.",
-            "A rival handles the issue instead and gains local reputation.",
-            "The faction chair is pleased and may support you later.",
-            "The local paper runs the story without your quote.",
-            "The party whip sends a warning.",
-            "Civil service officials quietly adjust their briefing line.",
-            "An opposing party spokesperson uses the row to attack your side.",
-        ]
-        reaction = self.random.choice(pool)
-        if not handled:
-            self.state.player.career_momentum = max(0, self.state.player.career_momentum - 1)
-            self.player_constituency.local_media_heat = min(100, self.player_constituency.local_media_heat + 1)
-        else:
-            self.state.player.career_momentum = min(100, self.state.player.career_momentum + 1)
-        return reaction
-
-    def _advance_time(self, slots: int) -> None:
-        assert self.state is not None
-        for _ in range(slots):
-            idx = SLOT_ORDER.index(self.state.slot)
-            if idx < len(SLOT_ORDER) - 1:
-                self.state.slot = SLOT_ORDER[idx + 1]
-                self.resolve_unhandled_moments()
-            else:
-                self.end_day()
-                self.start_next_day()
-
-    def resolve_unhandled_moments(self) -> None:
-        assert self.state is not None
-        current_idx = SLOT_ORDER.index(self.state.slot)
-        remaining: List[Moment] = []
-        for moment in self.state.active_moments:
-            age = current_idx - moment.created_slot_index
-            if age >= moment.expires_after_slots:
-                if moment.can_escalate and self.random.random() < 0.4:
-                    self.state.event_log.append(f"Escalation: {moment.title} becomes tomorrow's crisis.")
-                    self.state.player.leader_trust = max(0, self.state.player.leader_trust - 2)
-                else:
-                    self.state.event_log.append(f"System handled: {moment.title}. {moment.ignored_effect}")
-                    self.state.player.party_trust = max(0, self.state.player.party_trust - 1)
-            else:
-                remaining.append(moment)
-        self.state.active_moments = remaining
-
-    def end_day(self) -> None:
-        assert self.state is not None
-        self.resolve_unhandled_moments()
-        self.state.event_log.append(f"Day {self.state.day} ended.")
-
-    def start_next_day(self) -> None:
-        assert self.state is not None
-        self.state.day += 1
-        self.state.slot = TimeSlot.MORNING
-        self.state.player.stamina = min(100, self.state.player.stamina + 30)
-        self.generate_daily_agenda()
-        self.state.event_log.append(f"Day {self.state.day} started.")
-
-    def advance_time(self) -> str:
+    def ignore_moment(self, moment_id: str) -> str:
+        assert self.state
+        moment = self._get_moment(moment_id)
+        self._apply_effect_map(moment.ignored_effects)
+        self._apply_relationship_map(moment.ignored_relationship_effects)
         self._advance_time(1)
-        assert self.state is not None
-        return f"Time advanced to {self.state.date_label()}."
+        self._post_moment_progression(moment.id, "ignored")
+        result = f"Ignored: {moment.title}\nImmediate consequence: {moment.ignored_text}\nSystem reaction: {moment.system_reaction}\nTime advanced to {self.state.time_slot.value}."
+        self.state.current_result = result
+        self.state.event_log.append(result)
+        self.generate_agenda()
+        return result
 
-    def _check_career_opportunity(self) -> None:
-        assert self.state is not None
-        p = self.state.player
-        offers = p.career_state.promotion_offers
-        if p.career_momentum >= 60 and Role.CANDIDATE not in offers and p.current_role == Role.ACTIVIST:
-            offers.append(Role.CANDIDATE)
-            self.state.event_log.append("Career opportunity: candidate selection track is open.")
-        if p.career_momentum >= 68 and Role.MLA not in offers and p.current_role in [Role.COUNCILLOR, Role.CANDIDATE]:
-            offers.append(Role.MLA)
-            self.state.event_log.append("Career opportunity: committee and MLA track is open.")
-        if p.career_momentum >= 75 and Role.JUNIOR_MINISTER not in offers and p.current_role == Role.MLA:
-            offers.append(Role.JUNIOR_MINISTER)
-            self.state.event_log.append("Career opportunity: junior ministry is being discussed.")
-        if p.career_momentum >= 82 and Role.MINISTER not in offers and p.current_role == Role.JUNIOR_MINISTER:
-            offers.append(Role.MINISTER)
-            self.state.event_log.append("Career opportunity: ministerial role may be available.")
+    def _post_moment_progression(self, moment_id: str, decision_id: str) -> None:
+        assert self.state
+        if moment_id in self.pending_chain:
+            self.pending_chain.remove(moment_id)
 
-    def accept_promotion(self, role: Role) -> str:
-        assert self.state is not None
-        if role not in self.state.player.career_state.promotion_offers:
-            return "No such promotion offer is available."
-        old_role = self.state.player.current_role
-        self.state.player.current_role = role
-        self.state.player.career_state.previous_roles.append(old_role)
-        self.state.player.career_state.current_role = role
-        self.state.player.career_state.promotion_offers.remove(role)
-        self._update_player_available_actions()
-        self._recalculate_actor_influence()
-        return f"You accept the opportunity and move from {old_role.value} to {role.value}."
+        if moment_id == "candidate_selection_opening" and self._eligible_for_candidate_selection():
+            self.state.player.role = Role.CANDIDATE
+            self.state.career.current_role = Role.CANDIDATE
+            self.state.career.candidate_selected = True
+            self.state.career.recent_events.append("Selected as Assembly candidate.")
+
+        if moment_id == "election_result" and decision_id != "ignored":
+            if self.state.player.reputation >= 55 or self.state.player.career_momentum >= 7:
+                self.state.player.role = Role.MLA
+                self.state.career.current_role = Role.MLA
+                self.state.career.became_mla = True
+                self.state.career.recent_events.append("Won Assembly seat and became MLA.")
+            else:
+                self.state.career.recent_events.append("Narrow loss; moved into party support role.")
+
+        if moment_id == "party_crisis_briefing" and decision_id in {"crisis_defend", "crisis_brief"}:
+            self.state.career.survived_party_crisis = True
+
+        if moment_id == "junior_minister_offer" and decision_id == "offer_accept":
+            self.state.player.role = Role.JUNIOR_MINISTER
+            self.state.career.current_role = Role.JUNIOR_MINISTER
+            self.state.career.recent_events.append("Appointed junior minister.")
+
+    def _eligible_for_candidate_selection(self) -> bool:
+        assert self.state
+        return all(
+            [
+                self.state.player.reputation >= 55,
+                self.state.player.local_base >= 50,
+                self.state.relationships["local_branch"].score >= 50,
+                self.state.player.career_momentum >= 5,
+            ]
+        )
+
+    def _eligible_for_junior_minister(self) -> bool:
+        assert self.state
+        party = self.state.parties[self.state.player.party_id]
+        return all(
+            [
+                self.state.player.role == Role.MLA,
+                self.state.player.leader_trust >= 55,
+                self.state.player.party_trust >= 55,
+                self.state.player.reputation >= 60,
+                self.state.career.survived_party_crisis,
+                party.government_credibility >= 40,
+            ]
+        )
+
+    def _apply_effect_map(self, effects: Dict[str, int]) -> None:
+        assert self.state
+        for key, delta in effects.items():
+            if key.startswith("player."):
+                attr = key.split(".", 1)[1]
+                if hasattr(self.state.player, attr):
+                    setattr(self.state.player, attr, max(0, min(100, getattr(self.state.player, attr) + delta)))
+            elif key.startswith("party."):
+                attr = key.split(".", 1)[1]
+                party = self.state.parties[self.state.player.party_id]
+                if attr in party.custom_variables:
+                    party.custom_variables[attr] = max(0, min(100, party.custom_variables[attr] + delta))
+                elif hasattr(party, attr):
+                    setattr(party, attr, max(0, min(100, getattr(party, attr) + delta)))
+            elif key.startswith("constituency."):
+                attr = key.split(".", 1)[1]
+                c = self.state.constituencies[self.state.player.constituency_id]
+                if hasattr(c, attr):
+                    setattr(c, attr, max(0, min(100, getattr(c, attr) + delta)))
+            elif key.startswith("rival."):
+                rival = self.state.actors[f"{self.state.player.party_id}_rival"]
+                attr = key.split(".", 1)[1]
+                if hasattr(rival, attr):
+                    setattr(rival, attr, max(0, min(100, getattr(rival, attr) + delta)))
+
+    def _apply_relationship_map(self, rel: Dict[str, int]) -> None:
+        assert self.state
+        for k, v in rel.items():
+            if k in self.state.relationships:
+                self.state.relationships[k].score = max(0, min(100, self.state.relationships[k].score + v))
+
+    def _apply_career(self, career: Dict[str, int]) -> None:
+        assert self.state
+        self.state.player.career_momentum = max(0, min(100, self.state.player.career_momentum + career.get("career_momentum", 0)))
+
+    def _get_moment(self, moment_id: str) -> Moment:
+        assert self.state
+        for m in self.state.active_moments:
+            if m.id == moment_id:
+                return m
+        raise ValueError("Moment not in agenda")
+
+    def _advance_time(self, steps: int) -> None:
+        assert self.state
+        idx = SLOT_ORDER.index(self.state.time_slot)
+        for _ in range(steps):
+            idx += 1
+            if idx >= len(SLOT_ORDER):
+                idx = 0
+                self.state.current_date = self.state.current_date + timedelta(days=1)
+        self.state.time_slot = SLOT_ORDER[idx]
+
+    def _build_result(self, moment: Moment, decision: Decision) -> str:
+        assert self.state
+        return (
+            f"Decision taken: {decision.label}\n"
+            f"Immediate consequence: {decision.result_text}\n"
+            f"Party changes: {decision.effects}\n"
+            f"Relationship changes: {decision.relationship_effects}\n"
+            f"Career changes: {decision.career_effects}\n"
+            f"System reaction: {moment.system_reaction}\n"
+            f"Time advanced to: {self.state.time_slot.value}"
+        )
