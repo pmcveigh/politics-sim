@@ -43,6 +43,12 @@ class MomentCategory(str, Enum):
     REACTION = "Reaction"
 
 
+class StoryStatus(str, Enum):
+    ACTIVE = "Active"
+    RESOLVED = "Resolved"
+    FALLOUT = "Fallout"
+
+
 class Urgency(str, Enum):
     LOW = "Low"
     MEDIUM = "Medium"
@@ -179,6 +185,10 @@ class Decision:
     effects: Dict[str, int]
     relationship_effects: Dict[str, int]
     result_text: str
+    likely_upside: str = ""
+    likely_risk: str = ""
+    influence_cost: int = 0
+    affected_groups: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -201,6 +211,26 @@ class RoutineItem:
     escalation: str
     status: ItemStatus = ItemStatus.OPEN
     slots_remaining: int = 1
+    story_arc_id: Optional[str] = None
+
+
+@dataclass
+class StoryArc:
+    id: str
+    title: str
+    theme: str
+    status: StoryStatus
+    current_stage: int
+    linked_constituency_id: str
+    involved_actor_ids: List[str]
+    involved_relationships: List[str]
+    pressure_level: int
+    public_visibility: int
+    player_ownership: int
+    rival_ownership: int
+    next_possible_moments: List[str]
+    outcome_tags: List[str]
+    memory: Dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass
@@ -246,7 +276,9 @@ class SimulationState:
     moments: List[Moment]
     daily_agenda: DailyAgenda
     event_log: List[str]
+    active_story_arcs: List[StoryArc] = field(default_factory=list)
     current_result: str = ""
+    recent_consequence: str = ""
     main_actions_used: int = 0
     minor_actions_used: int = 0
 
