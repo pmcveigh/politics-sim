@@ -1,18 +1,4 @@
-# Northern Ireland Councillor Routine Simulator (MVP)
-
-## Focus
-This MVP is councillor-first. You start as a **Councillor**, and gameplay revolves around ordinary political routine rather than random dramatic events.
-
-Core loop:
-
-1. Start day
-2. Review inbox and agenda
-3. Choose what to handle
-4. Decide how to handle it
-5. System reacts
-6. Unresolved items escalate or are handled by others
-7. Time advances
-8. Repeat
+# Northern Ireland Councillor Political Simulator (MVP)
 
 ## Run
 ```bash
@@ -20,28 +6,72 @@ python -m pip install PySide6
 python -m political_sim.main
 ```
 
-## Design principles
-- Structured daily agenda with:
-  - one routine obligation,
-  - one optional opportunity,
-  - one possible complication.
-- Time slots: Morning, Afternoon, Evening, Late Night.
-- Event-driven consequences only (no passive weekly stat drift).
-- Choices are about **handling style** (quiet admin, personal ward work, media play, escalation, delay/ignore, etc.).
-- Rival councillor can gain from unhandled visible issues.
-- Council officers, party group, branch, local media, and residents' relationships matter.
+## MVP focus
+You play one councillor inside a living local political ecosystem. The simulation is about routine political work:
 
-## Career path (still MVP)
-Path remains:
+- resident complaints and casework follow-up,
+- officer coordination,
+- committee and council business,
+- party/branch pressure,
+- social media and local press,
+- rival councillor competition,
+- career progression.
+
+The system continues acting without you: rivals intervene, officers delay, media runs stories, and party actors react.
+
+## Dashboard-led interface
+The app launches into a dashboard hub inspired by management-game desk screens. It is the main navigation surface and includes:
+
+1. Today’s Desk
+2. Casework Inbox
+3. Today’s Routine
+4. Ward Mood
+5. Party Pressure
+6. Relationships
+7. Career Track
+8. News / Local Chatter
+9. Alerts
+10. Recent Consequence
+11. Active Local Story
+
+Each panel has an **Open** action to jump to Inbox, Routine, Stories, Constituency, Party, Relationships, Career, Decision Result, or Log screens.
+
+## Story arcs (MVP)
+A light narrative layer connects decisions across days via persistent `StoryArc` state and memory flags.
+
+Implemented arcs:
+- School parking chaos
+- Planning objection row
+- Missed bins backlash
+- Town centre decline
+
+Each arc has stages (initial complaint -> escalation -> resolution/fallout), plus tracked pressure, public visibility, player/rival ownership, and remembered handling style (public vs quiet, rival intervention, officer/media/party dynamics).
+
+## Event-driven consequences
+There is no passive weekly drift. Variables move because events happen:
+
+- player decisions,
+- ignored issues,
+- rival interventions,
+- officer responses,
+- media coverage,
+- party reaction,
+- story escalation and outcomes,
+- career opportunities.
+
+## Career path
+Career track remains:
 
 **Councillor -> Candidate -> MLA -> Junior Minister**
 
-Assembly selection opportunity appears only when routine-based thresholds are met (reputation, local base, branch support, momentum, and manageable rival threat).
+Dashboard and Career screens show progress toward Assembly selection using routine performance, local base, branch support, momentum, and rival pressure.
 
-## Included screens
-- Dashboard
-- Inbox
-- Routine (grouped by time slot)
-- Party / Factions / Actors / Constituency / Relationships / Career
-- Decision Result
-- Log
+## Current MVP scope limits
+Not yet in scope:
+- deep negotiation mini-systems,
+- long-term policy drafting,
+- election campaign mode,
+- advanced AI personalities for all actors,
+- polished visual theme.
+
+The current priority is functional desk-style decision flow and narrative continuity.
